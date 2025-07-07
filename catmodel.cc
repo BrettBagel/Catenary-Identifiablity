@@ -9,6 +9,7 @@
 #include <unordered_set>
 #include <chrono>
 #include <gmpxx.h>
+#include <numeric>
 
 using namespace std;
 using namespace GiNaC;
@@ -465,12 +466,76 @@ string matrixToMathematica(const matrix& M) {
     return out.str();
 }
 
+/**
+ * Computes the GCD of all r×r submatrix determinants of a non-square Jacobian matrix
+ * @param J the Jacobian matrix
+ * @return the symbolic GCD of all r×r submatrix determinants
+ */
+ex gcd_of_maximal_minors(const matrix& J) {
+    int r = J.rank();
+    int rows = J.rows();
+    int cols = J.cols();
+
+    if (r == 0)
+        return 0;
+
+    vector<ex> minors;
+
+    // Generate all r-row and r-col index combinations
+    vector<vector<int>> row_indices;
+    vector<vector<int>> col_indices;
+
+    // Helper lambda to generate combinations
+    auto generate_combinations = [](int n, int k) {
+        vector<vector<int>> result;
+        vector<int> comb(k);
+        iota(comb.begin(), comb.end(), 0);
+        while (true) {
+            result.push_back(comb);
+            int i = k - 1;
+            while (i >= 0 && comb[i] == n - k + i) --i;
+            if (i < 0) break;
+            ++comb[i];
+            for (int j = i + 1; j < k; ++j)
+                comb[j] = comb[j - 1] + 1;
+        }
+        return result;
+    };
+
+    row_indices = generate_combinations(rows, r);
+    col_indices = generate_combinations(cols, r);
+
+    for (const auto& row_set : row_indices) {
+        for (const auto& col_set : col_indices) {
+            matrix submat(r, r);
+            for (int i = 0; i < r; ++i)
+                for (int j = 0; j < r; ++j)
+                    submat(i, j) = J(row_set[i], col_set[j]);
+
+            ex det = submat.determinant();
+            if (!det.is_zero())
+                minors.push_back(det);
+        }
+    }
+
+    if (minors.empty())
+        return 0;
+
+    // Compute GCD of all minor determinants
+    ex result = minors[0];
+    for (size_t i = 1; i < minors.size(); ++i)
+        result = gcd(result, minors[i]);
+
+    return collect_common_factors(result);
+}
+
 int main() {
     UserInput input = user_input();
     vector<ex> all_params;
     vector<vector<int>> subsets = gamma(input);
     vector<vector<int>> subsets_plus = gamma_plus(subsets);
     vector<ex> coefficients = compute_coefficient_map(input, subsets, subsets_plus);
+    bool is_full_rank = false;
     auto start = chrono::high_resolution_clock::now();
 
     cout << "\nWelcome to the Catenary Model Identifier!" << endl;
@@ -498,25 +563,50 @@ int main() {
     cout << matrixToMathematica(J) << endl;
     
     if (input.n < 5) {
+        int rank = J.rank();
+        cout << "Rank of Jacobian Matrix: " << rank << endl;
+
+        if (rank == J.cols()) {
+            cout << "The model is identifiable & full rank; rank = " << rank << "." << endl;
+            is_full_rank = true;
+        } 
+        else
+            cout << "The model is not identifiable & not full rank; rank = " << rank << "." << endl;
         cout << "----------------------------------------" << endl;
+        
+        // In the case Jacobian is square, compute the determinant
         if (J.rows() == J.cols()) {
             ex determinant = J.determinant();
             determinant = collect_common_factors(determinant);
-            cout << "Determinant of Jacobian Matrix: " << determinant << endl;
+            cout << "Determinant of square Jacobian Matrix: " << determinant << endl;
         }
-        cout << "Rank of Jacobian Matrix: " << J.rank() << endl;
+        else if (is_full_rank){
+            cout << "Jacobian Matrix is not square but is full rank, computing GCD of maximal minors instead." << endl;
+            ex gcd_result = gcd_of_maximal_minors(J);
+            cout << "GCD of maximal minors: " << gcd_result << endl;
+        }
+        else
+            cout << "The determinant is 0.";
+
+        
         cout << "----------------------------------------" << endl;
     }
 
     // End timer
     auto end = std::chrono::high_resolution_clock::now();
-
-    // Calculate duration in milliseconds
     chrono::duration<double, milli> duration = end - start;
 
     // Output time taken
-    cout << "-----------------------------\n";
     cout << "Computation Time: " << duration.count() << " ms" << endl;
+    cout << "The user-specified parameters are as follows:\n";
+    cout << "Number of Compartments: " << input.n << endl;
+    cout << "Input Node: " << input.in << endl;
+    cout << "Output Node: " << input.p << endl;
+    cout << "Leak Compartments: ";
+    for (const auto& leak : input.leak_compartments) {
+        cout << leak << " ";
+    }
+    cout << endl;
     cout << "-----------------------------\n";
     cout << "Thank you for using the Catenary Model Identifier!" << endl;
     return 0;
