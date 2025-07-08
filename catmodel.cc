@@ -8,6 +8,7 @@
 #include <ginac/ginac.h>
 #include <unordered_set>
 #include <chrono>
+#include <sstream>
 #include <gmpxx.h>
 
 using namespace std;
