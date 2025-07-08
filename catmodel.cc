@@ -11,6 +11,7 @@
 #include <sstream>
 #include <gmpxx.h>
 #include <numeric>
+#include <fstream>
 
 using namespace std;
 using namespace GiNaC;
@@ -467,6 +468,7 @@ string matrixToMathematica(const matrix& M) {
     return out.str();
 }
 
+
 /**
  * Computes the GCD of all r×r submatrix determinants of a non-square Jacobian matrix
  * @param J the Jacobian matrix
@@ -536,6 +538,7 @@ int main() {
     vector<vector<int>> subsets = gamma(input);
     vector<vector<int>> subsets_plus = gamma_plus(subsets);
     vector<ex> coefficients = compute_coefficient_map(input, subsets, subsets_plus);
+    ofstream output_file("jacobian.txt");
     bool is_full_rank = false;
     auto start = chrono::high_resolution_clock::now();
 
@@ -562,6 +565,8 @@ int main() {
     cout << "-----------------------------\n";
     cout << "Jacobian Matrix in Mathematica format:\n";
     cout << matrixToMathematica(J) << endl;
+    output_file << matrixToMathematica(J) << flush;
+    output_file.close();
     
     if (input.n < 5) {
         int rank = J.rank();
