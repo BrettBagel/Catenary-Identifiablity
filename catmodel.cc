@@ -7,8 +7,6 @@
 #include <cln/cln.h>
 #include <ginac/ginac.h>
 #include <unordered_set>
-#include <chrono>
-#include <gmpxx.h>
 #include <numeric>
 
 using namespace std;
@@ -321,24 +319,30 @@ ex helper_sum(UserInput& input, vector<vector<int>>& subsets, vector<vector<int>
             int length = subset.size();
             int e_index = i - (2 * length);
             if (length * 2 <= i) {
-                vector<ex> set_for_esp = out_Ml(input, compartment_set(input.all_compartments, subsets_plus[iterator]));
+                vector<int> exclusion_set = compartment_set(input.all_compartments, subsets_plus[iterator]);
+                vector<ex> set_for_esp = out_Ml(input, exclusion_set);
                 sum += kappa(input, subset) * elementary_symmetric_polynomials(set_for_esp, e_index)[e_index];
             }
             iterator++;
         }
     }
     else {
+        int iterator = 0;
         for (const auto& subset : subsets) {
             int length = subset.size();
             int e_index = i - input.d - (2 * length);
             vector<int> intersection = intersection_of_sets(subset, input.P);
             if (length * 2 <= i && intersection.empty()) {
-                vector<ex> set_for_esp = out_Ml(input, compartment_set(input.all_compartments, union_sets(subsets_plus[iterator], input.P)));
-                if (e_index < 0 || e_index > set_for_esp.size())
+                vector<int> unionize = union_sets(subsets_plus[iterator], input.P);
+                vector<int> exclusion_set = compartment_set(input.all_compartments, unionize);
+                vector<ex> set_for_esp = out_Ml(input, exclusion_set);
+                if (e_index < 0 || e_index > set_for_esp.size()) {
+                    iterator++;
                     continue;
+                }
                 sum += kappa(input, subset) * elementary_symmetric_polynomials(set_for_esp, e_index)[e_index];
             }
-            iterator++;
+            iterator += 1;
         }
     }
     return sum;
@@ -354,7 +358,6 @@ ex helper_sum(UserInput& input, vector<vector<int>>& subsets, vector<vector<int>
 vector<ex> compute_coefficient_map(UserInput& input, vector<vector<int>>& subsets, vector<vector<int>>& subsets_plus) {
     vector<ex> coefficients;
     vector<ex> full_esp_list = elementary_symmetric_polynomials(out_Ml(input, input.all_compartments), input.n);
-
     vector<int> tilde_set = compartment_set(input.all_compartments, input.P);
     vector<ex> tilde_esp_list = elementary_symmetric_polynomials(out_Ml(input, tilde_set), tilde_set.size());
     
@@ -375,7 +378,6 @@ vector<ex> compute_coefficient_map(UserInput& input, vector<vector<int>>& subset
             curr_tilde_esp = 0;
         else
             curr_tilde_esp = tilde_esp_list[i - input.d];
-
         a_i_tilde = full_kappa * curr_tilde_esp - helper_sum(input, subsets, subsets_plus, full_kappa, i, true);
         coefficients.push_back(a_i_tilde);
     }
@@ -536,13 +538,20 @@ int main() {
     vector<vector<int>> subsets_plus = gamma_plus(subsets);
     vector<ex> coefficients = compute_coefficient_map(input, subsets, subsets_plus);
     bool is_full_rank = false;
-    auto start = chrono::high_resolution_clock::now();
 
     cout << "\nWelcome to the Catenary Model Identifier!" << endl;
     cout << "This program computes the Jacobian matrix of the coefficients with respect to the parameters." << endl;
     cout << "You can use Mathematica to compute the rank and determinant of the models n >= 5, but there are built in functions for n < 5 if you want to use them." << endl;
     
     matrix J = compute_jacobian(coefficients, input.parameters);
+
+    // Print the coefficients
+    cout << "\nCoefficients (a_i and a_i tilde):" << endl;
+    cout << "----------------------------------------" << endl;
+    for (size_t i = 0; i < coefficients.size(); ++i) {
+        cout << "Coefficient a_" << (i + 1) << ": " << coefficients[i] << endl;
+    }
+    cout << "----------------------------------------" << endl;
     
     cout << "\nJacobian Matrix (∂coefficients/∂parameters):" << endl;
     cout << "----------------------------------------" << endl;
@@ -592,12 +601,6 @@ int main() {
         cout << "----------------------------------------" << endl;
     }
 
-    // End timer
-    auto end = std::chrono::high_resolution_clock::now();
-    chrono::duration<double, milli> duration = end - start;
-
-    // Output time taken
-    cout << "Computation Time: " << duration.count() << " ms" << endl;
     cout << "The user-specified parameters are as follows:\n";
     cout << "Number of Compartments: " << input.n << endl;
     cout << "Input Node: " << input.in << endl;
