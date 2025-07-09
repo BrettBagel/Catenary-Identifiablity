@@ -5,39 +5,38 @@ You can use Mathematica to compute the rank and determinant of the models n >= 5
 
 Coefficients (a_i and a_i tilde):
 ----------------------------------------
-Coefficient a_1: k02+k32+k01+k23+k21+k03+k12
-Coefficient a_2: -k21*k12+(k02+k32+k12)*(k01+k21)+(k02+k32+k01+k21+k12)*(k23+k03)-k32*k23
-Coefficient a_3: -k21*(k23+k03)*k12-k32*(k01+k21)*k23+(k02+k32+k12)*(k01+k21)*(k23+k03)
+Coefficient a_1: k03+k23+k32+k12+k01+k02+k21
+Coefficient a_2: (k01+k21)*(k32+k12+k02)+(k32+k12+k01+k02+k21)*(k03+k23)-k12*k21-k23*k32
+Coefficient a_3: -k12*(k03+k23)*k21+(k01+k21)*(k03+k23)*(k32+k12+k02)-k23*k32*(k01+k21)
 Coefficient a_4: 1
-Coefficient a_5: k02+k32+k23+k03+k12
-Coefficient a_6: -k32*k23+(k02+k32+k12)*(k23+k03)
+Coefficient a_5: k03+k23+k32+k12+k02
+Coefficient a_6: (k03+k23)*(k32+k12+k02)-k23*k32
 Coefficient a_7: 0
 ----------------------------------------
 
 Jacobian Matrix (∂coefficients/∂parameters):
 ----------------------------------------
 Row 1: [1, 1, 1, 1, 1, 1, 1]
-Row 2: [k02+k32+k23+k03, k01+k23+k03, k01+k21+k03, k02+k01+k21+k12, k02+k32+k01+k21+k12, k01+k23+k21+k03, k02+k32+k23+k03+k12]
-Row 3: [k02*k23+k02*k03+k32*k03, k01*k03+k01*k23, k21*k03+k01*k03, k02*k01+k01*k12+k02*k21, k32*k21+k02*k01+k01*k12+k32*k01+k02*k21, k21*k03+k23*k21+k01*k03+k01*k23, k03*k12+k02*k23+k02*k03+k32*k03+k23*k12]
+Row 2: [k03+k23+k32+k02, k03+k23+k01, k03+k01+k21, k12+k01+k02+k21, k32+k12+k01+k02+k21, k03+k23+k01+k21, k03+k23+k32+k12+k02]
+Row 3: [k23*k02+k03*k32+k03*k02, k23*k01+k03*k01, k03*k01+k03*k21, k12*k01+k02*k21+k01*k02, k32*k01+k32*k21+k12*k01+k02*k21+k01*k02, k23*k01+k23*k21+k03*k01+k03*k21, k23*k02+k03*k32+k03*k12+k23*k12+k03*k02]
 Row 4: [0, 0, 0, 0, 0, 0, 0]
 Row 5: [0, 1, 1, 1, 1, 1, 0]
-Row 6: [0, k23+k03, k03, k02+k12, k02+k32+k12, k23+k03, 0]
+Row 6: [0, k03+k23, k03, k12+k02, k32+k12+k02, k03+k23, 0]
 Row 7: [0, 0, 0, 0, 0, 0, 0]
 -----------------------------
 Jacobian Matrix in Mathematica format:
 {{1, 1, 1, 1, 1, 1, 1},
-{k02+k32+k23+k03, k01+k23+k03, k01+k21+k03, k02+k01+k21+k12, k02+k32+k01+k21+k12, k01+k23+k21+k03, k02+k32+k23+k03+k12},
-{k02*k23+k02*k03+k32*k03, k01*k03+k01*k23, k21*k03+k01*k03, k02*k01+k01*k12+k02*k21, k32*k21+k02*k01+k01*k12+k32*k01+k02*k21, k21*k03+k23*k21+k01*k03+k01*k23, k03*k12+k02*k23+k02*k03+k32*k03+k23*k12},
+{k03+k23+k32+k02, k03+k23+k01, k03+k01+k21, k12+k01+k02+k21, k32+k12+k01+k02+k21, k03+k23+k01+k21, k03+k23+k32+k12+k02},
+{k23*k02+k03*k32+k03*k02, k23*k01+k03*k01, k03*k01+k03*k21, k12*k01+k02*k21+k01*k02, k32*k01+k32*k21+k12*k01+k02*k21+k01*k02, k23*k01+k23*k21+k03*k01+k03*k21, k23*k02+k03*k32+k03*k12+k23*k12+k03*k02},
 {0, 0, 0, 0, 0, 0, 0},
 {0, 1, 1, 1, 1, 1, 0},
-{0, k23+k03, k03, k02+k12, k02+k32+k12, k23+k03, 0},
+{0, k03+k23, k03, k12+k02, k32+k12+k02, k03+k23, 0},
 {0, 0, 0, 0, 0, 0, 0}}
 Rank of Jacobian Matrix: 5
 The model is not identifiable & not full rank; rank = 5.
 ----------------------------------------
 Determinant of square Jacobian Matrix: 0
 ----------------------------------------
-Computation Time: 10.3164 ms
 The user-specified parameters are as follows:
 Number of Compartments: 3
 Input Node: 1

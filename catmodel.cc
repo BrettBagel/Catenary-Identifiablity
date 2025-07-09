@@ -10,6 +10,7 @@
 #include <chrono>
 #include <sstream>
 #include <gmpxx.h>
+#include <cstring>
 #include <numeric>
 #include <fstream>
 
@@ -536,13 +537,130 @@ ex gcd_of_maximal_minors(const matrix& J) {
     return collect_common_factors(result);
 }
 
-int main() {
+/**
+ * @brief Generates all valid combinations of k elements from a set of n elements
+ * @param n 
+ * @param k
+ * @return 2d array of combinations
+ */
+vector<vector<int>> generate_combinations(int n, int k) {
+    vector<vector<int>> result;
+    vector<int> comb(k);
+    iota(comb.begin(), comb.end(), 1);
+    
+    while (true) {
+        result.push_back(comb);
+        int i = k - 1;
+        while (i >= 0 && comb[i] == n - k + i + 1) --i;
+        if (i < 0) break;
+        ++comb[i];
+        for (int j = i + 1; j < k; ++j)
+            comb[j] = comb[j - 1] + 1;
+    }
+    return result;
+}
+
+/**
+ * @brief Converts a array of leak compartments to a comma-separated string
+ * @param leaks array of leaks
+ */
+string leaks_to_string(const vector<int>& leaks) {
+    if (leaks.empty()) return "";
+    
+    string result = to_string(leaks[0]);
+    for (size_t i = 1; i < leaks.size(); ++i) {
+        result += "," + to_string(leaks[i]);
+    }
+    return result;
+}
+
+/**
+ * @brief Runs all combinations for a given number of compartments and outputs 
+ * to CSV
+ * @param n number of nodes
+ * @param filename output spreadsheet filename
+ */
+void run_all_combinations(int n, const string& filename) {
+    ofstream csv_file(filename);
+    csv_file << "# compartments,# leaks,Leak locations,Input,Output,Identifiable,Rank,Singular Locus\n";
+
+    for (int num_leaks = 0; num_leaks <= n; ++num_leaks) {
+        vector<vector<int>> leak_combinations;
+        
+        if (num_leaks == 0) {
+            leak_combinations.push_back(vector<int>{});
+        } else {
+            leak_combinations = generate_combinations(n, num_leaks);
+        }
+        
+        for (const auto& leak_combo : leak_combinations) {
+            for (int input = 1; input <= n; ++input) {
+                for (int output = input; output <= n; ++output) {
+                    UserInput input_config;
+                    input_config.n = n;
+                    input_config.in = input;
+                    input_config.p = output;
+                    input_config.d = output - input;
+                    
+                    for (int leak : leak_combo) {
+                        input_config.leak_compartments.insert(leak);
+                    }                
+                    
+                    for (int i = 1; i <= n; i++) {
+                        input_config.all_compartments.push_back(i);
+                    }
+                    for (int i = input; i <= output; i++) {
+                        input_config.P.push_back(i);
+                    }
+                    
+                    create_symbols(input_config);
+                                        
+                    vector<vector<int>> subsets = gamma(input_config);
+                    vector<vector<int>> subsets_plus = gamma_plus(subsets);
+                    vector<ex> coefficients = compute_coefficient_map(input_config, subsets, subsets_plus);
+                    matrix J = compute_jacobian(coefficients, input_config.parameters);
+                    
+                    int rank = J.rank();
+                    int max_rank = min(J.rows(), J.cols());
+                    bool identifiable = (rank == J.cols());                   
+                    
+                    csv_file << n << "," 
+                             << num_leaks << "," 
+                             << "\"" << leaks_to_string(leak_combo) << "\"," 
+                             << input << "," 
+                             << output << "," 
+                             << (identifiable ? "True" : "False") << "," 
+                             << rank << "/" << max_rank << ","
+                             << "\n"; 
+                }
+            }
+        }
+    }
+    
+    csv_file.close();
+}
+
+int main(int argc, char* argv[]) {
+    // Check for command line arguments
+    bool batch_mode = false;
+    if (argc > 1 && strcmp(argv[1], "-s") == 0) {
+        batch_mode = true;
+    }
+    
+    if (batch_mode) {
+        cout << "Running in batch mode - generating CSV for all combinations of n=3..." << endl;
+        run_all_combinations(3, "catenary_results.csv");
+        cout << "CSV file 'catenary_results.csv' has been generated." << endl;
+        return 0;
+    }
+    
+    // Original interactive mode
     UserInput input = user_input();
     vector<ex> all_params;
     vector<vector<int>> subsets = gamma(input);
     vector<vector<int>> subsets_plus = gamma_plus(subsets);
     vector<ex> coefficients = compute_coefficient_map(input, subsets, subsets_plus);
-    ofstream output_file("jacobian.txt");
+    ofstream J_output_file("jacobian.txt");
     bool is_full_rank = false;
 
     cout << "\nWelcome to the Catenary Model Identifier!" << endl;
@@ -576,8 +694,8 @@ int main() {
     cout << "-----------------------------\n";
     cout << "Jacobian Matrix in Mathematica format:\n";
     cout << matrixToMathematica(J) << endl;
-    output_file << matrixToMathematica(J) << flush;
-    output_file.close();
+    J_output_file << matrixToMathematica(J) << flush;
+    J_output_file.close();
     
     if (input.n < 5) {
         int rank = J.rank();
@@ -621,4 +739,4 @@ int main() {
     cout << "-----------------------------\n";
     cout << "Thank you for using the Catenary Model Identifier!" << endl;
     return 0;
-}    
+}
