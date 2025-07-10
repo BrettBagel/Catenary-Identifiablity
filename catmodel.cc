@@ -575,6 +575,33 @@ string leaks_to_string(const vector<int>& leaks) {
 }
 
 /**
+ * @brief Returns just the factors of an expression
+ * 
+ * @param expr 
+ * @return ex 
+ */
+ex extract_factors(const ex& expr) {
+    if (!is_a<mul>(expr)) {
+        if (is_a<add>(expr)) {
+            return 1;
+        }
+        return expr;
+    }
+    
+    ex result = 1;
+    
+    for (size_t i = 0; i < expr.nops(); i++) {
+        ex factor = expr.op(i);
+        
+        if (!is_a<add>(factor)) {
+            result *= factor;
+        }
+    }
+    
+    return result;
+}
+
+/**
  * @brief Runs all combinations for a given number of compartments and outputs 
  * to CSV
  * @param n number of nodes
@@ -621,8 +648,18 @@ void run_all_combinations(int n, const string& filename) {
                     matrix J = compute_jacobian(coefficients, input_config.parameters);
                     
                     int rank = J.rank();
-                    int max_rank = min(J.rows(), J.cols());
-                    bool identifiable = (rank == J.cols());                   
+                    int max_rank = J.cols();
+                    bool identifiable = (rank == max_rank);
+                    
+                    ex locus = 0;
+                    if (J.rows() == J.cols()) {
+                        locus = extract_factors(collect_common_factors(J.determinant()));
+                    } else if (identifiable) {
+                        locus = extract_factors(gcd_of_maximal_minors(J));
+                    } else {
+                        locus = 0;
+                    }
+
                     
                     csv_file << n << "," 
                              << num_leaks << "," 
@@ -631,7 +668,7 @@ void run_all_combinations(int n, const string& filename) {
                              << output << "," 
                              << (identifiable ? "True" : "False") << "," 
                              << rank << "/" << max_rank << ","
-                             << "\n"; 
+                             << locus << "\n"; 
                 }
             }
         }
@@ -641,7 +678,6 @@ void run_all_combinations(int n, const string& filename) {
 }
 
 int main(int argc, char* argv[]) {
-    // Check for command line arguments
     bool batch_mode = false;
     if (argc > 1 && strcmp(argv[1], "-s") == 0) {
         batch_mode = true;
@@ -649,7 +685,7 @@ int main(int argc, char* argv[]) {
     
     if (batch_mode) {
         cout << "Running in batch mode - generating CSV for all combinations of n=3..." << endl;
-        run_all_combinations(3, "catenary_results.csv");
+        run_all_combinations(3 , "catenary_results.csv");
         cout << "CSV file 'catenary_results.csv' has been generated." << endl;
         return 0;
     }
@@ -710,11 +746,14 @@ int main(int argc, char* argv[]) {
         cout << "----------------------------------------" << endl;
         
         // In the case Jacobian is square, compute the determinant
+        ex locus = 0;
         if (J.rows() == J.cols()) {
             ex determinant = J.determinant();
             determinant = collect_common_factors(determinant);
+            locus = extract_factors(determinant);
             cout << "Determinant of square Jacobian Matrix: " << determinant << endl;
-        }
+            cout << "Singular locus of square Jacobian Matrix: " << locus << endl;
+        } 
         else if (is_full_rank){
             cout << "Jacobian Matrix is not square but is full rank, computing GCD of maximal minors instead." << endl;
             ex gcd_result = gcd_of_maximal_minors(J);
