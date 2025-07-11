@@ -605,12 +605,11 @@ ex extract_factors(const ex& expr) {
  * @brief Runs all combinations for a given number of compartments and outputs 
  * to CSV
  * @param n number of nodes
- * @param filename output spreadsheet filename
+ * @param csv_file spreadsheet out stream
  */
-void run_all_combinations(int n, const string& filename) {
-    ofstream csv_file(filename);
-    csv_file << "# compartments,# leaks,Leak locations,Input,Output,Identifiable,Rank,Singular Locus\n";
-
+void run_all_combinations(int n, ofstream& csv_file) {
+    int count = 0;
+    ex max_case = GiNaC::pow(2, n - 1) * n * (n + 1);
     for (int num_leaks = 0; num_leaks <= n; ++num_leaks) {
         vector<vector<int>> leak_combinations;
         
@@ -668,13 +667,13 @@ void run_all_combinations(int n, const string& filename) {
                              << output << "," 
                              << (identifiable ? "True" : "False") << "," 
                              << rank << "/" << max_rank << ","
-                             << locus << "\n"; 
+                             << locus << endl; 
+                    count++;
+                    cout << count << "/" << max_case << endl;
                 }
             }
         }
     }
-    
-    csv_file.close();
 }
 
 int main(int argc, char* argv[]) {
@@ -684,8 +683,17 @@ int main(int argc, char* argv[]) {
     }
     
     if (batch_mode) {
-        cout << "Running in batch mode - generating CSV for all combinations of n=3..." << endl;
-        run_all_combinations(3 , "catenary_results.csv");
+        int max_nodes = 0;
+        cout << "Max graph size: " << endl;
+        cin >> max_nodes;
+        cout << "Running in batch mode - generating CSV for all combinations of n=" << max_nodes << "..." << endl;
+        string filename = "catenary_results.csv";
+        ofstream csv_file(filename);
+        csv_file << "# compartments,# leaks,Leak locations,Input,Output,Identifiable,Rank,Singular Locus\n";
+        for (int i = 1; i <= max_nodes; i++) {
+            run_all_combinations(i , csv_file);
+        }
+        csv_file.close();
         cout << "CSV file 'catenary_results.csv' has been generated." << endl;
         return 0;
     }
