@@ -13,6 +13,13 @@
 #include <cstring>
 #include <numeric>
 #include <fstream>
+#include <thread>
+#include <ctime>
+#include <string>
+#include <regex>
+#include <map>
+#include "/Applications/Wolfram.app/Contents/SystemFiles/Links/WSTP/DeveloperKit/MacOSX-x86-64/CompilerAdditions/wstp.h"
+
 
 using namespace std;
 using namespace GiNaC;
@@ -43,6 +50,413 @@ struct UserInput {
         symbol_map[name] = s;
         return s;
     }
+};
+
+class MathematicaInterface {
+private:
+    WSENV env;
+    WSLINK rank_link;
+    WSLINK det_link;
+
+    void clearPendingPackets(WSLINK link) {
+        while (WSReady(link)) {
+            int packet = WSNextPacket(link);
+            if (packet == 0) break;
+            WSNewPacket(link);
+        }
+    }
+    
+    WSLINK createKernel() {
+        if (!env) {
+            cerr << "Environment not initialized" << endl;
+            return nullptr;
+        }
+        
+        int error;
+        WSLINK link = WSOpenString(env, "-linkname '/Applications/Wolfram.app/Contents/MacOS/MathKernel' -linkmode launch", &error);
+        if (!link) {
+            cerr << "Failed to launch Mathematica kernel, error: " << error << endl;
+            return nullptr;
+        }
+        
+        if (!WSConnect(link)) {
+            cerr << "Failed to connect to Mathematica kernel" << endl;
+            WSClose(link);
+            return nullptr;
+        }
+        
+        // Wait for kernel to be ready
+        int timeout = 30;
+        while (timeout > 0 && !WSReady(link)) {
+            this_thread::sleep_for(chrono::milliseconds(100));
+            timeout--;
+        }
+        
+        if (!WSReady(link)) {
+            cerr << "Mathematica kernel not ready after timeout" << endl;
+            WSClose(link);
+            return nullptr;
+        }
+        
+        return link;
+    }
+
+    bool define_gcd_function() {
+        if (!det_link) {
+            cerr << "Determinant kernel not connected" << endl;
+            return false;
+        }
+        
+        clearPendingPackets(det_link);
+        WSNewPacket(det_link);
+        
+        const char* function_def = 
+            "GCDofRankSubminors[mat_, x_] := Module[{subs, dets, result}, "
+            "subs = Subsets[Range[Length[mat]], {x}]; "
+            "dets = Flatten[Table[Det[mat[[rows, cols]]], {rows, subs}, {cols, Subsets[Range[Length[First[mat]]], {x}]}]]; "
+            "result = GCD @@ DeleteCases[dets, 0]; "
+            "ToString[TeXForm[result], InputForm]]";
+        
+        if (!WSPutFunction(det_link, "ToExpression", 1)) {
+            cerr << "Failed to send ToExpression for function definition" << endl;
+            return false;
+        }
+        
+        if (!WSPutString(det_link, function_def)) {
+            cerr << "Failed to send function definition" << endl;
+            return false;
+        }
+        
+        if (!WSEndPacket(det_link)) {
+            cerr << "Failed to end packet for function definition" << endl;
+            return false;
+        }
+        
+        // Wait for acknowledgment
+        int packet_type = WSNextPacket(det_link);
+        WSNewPacket(det_link);
+        
+        return (packet_type == RETURNPKT);
+    }
+    
+public:
+    MathematicaInterface() : env(nullptr), rank_link(nullptr), det_link(nullptr) {}
+    
+    bool initialize() {
+        env = WSInitialize(nullptr);
+        if (!env) {
+            cerr << "Failed to initialize WSTP environment" << endl;
+            return false;
+        }
+        
+        // Create separate kernels for rank and determinant calculations
+        rank_link = createKernel();
+        det_link = createKernel();
+
+        bool locus_func = define_gcd_function();
+        
+        return (rank_link != nullptr && det_link != nullptr && locus_func);
+    }
+    
+    void cleanup() {
+        if (rank_link) {
+            WSClose(rank_link);
+            rank_link = nullptr;
+        }
+        if (det_link) {
+            WSClose(det_link);
+            det_link = nullptr;
+        }
+        if (env) {
+            WSDeinitialize(env);
+            env = nullptr;
+        }
+    }
+    
+    ~MathematicaInterface() {
+        cleanup();
+    }
+    
+    /**
+     * @brief Calculates the rank of a matrix using dedicated rank kernel
+     * @param matrix 
+     * @return int 
+     */
+    int calc_rank(const vector<vector<string>>& matrix) {
+        if (!rank_link) {
+            cerr << "Rank kernel not connected" << endl;
+            return -1;
+        }
+        
+        // Clear any pending packets
+        clearPendingPackets(rank_link);
+        WSNewPacket(rank_link);
+        
+        auto start_time = chrono::steady_clock::now();
+        const int timeout_seconds = 60;
+        
+        if (!WSPutFunction(rank_link, "MatrixRank", 1)) {
+            cerr << "Failed to send MatrixRank function" << endl;
+            return -1;
+        }
+        
+        if (!WSPutFunction(rank_link, "List", matrix.size())) {
+            cerr << "Failed to send outer List" << endl;
+            return -1;
+        }
+        
+        for (const auto& row : matrix) {
+            if (!WSPutFunction(rank_link, "List", row.size())) {
+                cerr << "Failed to send row List" << endl;
+                return -1;
+            }
+            for (const auto& element : row) {
+                if (!WSPutFunction(rank_link, "ToExpression", 1)) {
+                    cerr << "Failed to send ToExpression" << endl;
+                    return -1;
+                }
+                if (!WSPutString(rank_link, element.c_str())) {
+                    cerr << "Failed to send element: " << element << endl;
+                    return -1;
+                }
+            }
+        }
+        
+        if (!WSEndPacket(rank_link)) {
+            cerr << "Failed to end packet" << endl;
+            return -1;
+        }
+        
+        // Wait for result
+        int packet_type;
+        int attempts = 0;
+        const int max_attempts = 100;
+        
+        while (attempts < max_attempts) {
+            auto current_time = chrono::steady_clock::now();
+            if (chrono::duration_cast<chrono::seconds>(current_time - start_time).count() > timeout_seconds) {
+                cerr << "Timeout waiting for rank result" << endl;
+                WSNewPacket(rank_link);
+                return -1;
+            }
+            
+            packet_type = WSNextPacket(rank_link);
+            
+            if (packet_type == 0) {
+                cerr << "Error in communication - no packet received" << endl;
+                return -1;
+            }
+            
+            if (packet_type == RETURNPKT) {
+                break;
+            }
+            
+            // Handle other packet types
+            switch (packet_type) {
+                case TEXTPKT:
+                    {
+                        const char* text;
+                        if (WSGetString(rank_link, &text)) {
+                            WSReleaseString(rank_link, text);
+                        }
+                    }
+                    break;
+                    
+                case MESSAGEPKT:
+                    {
+                        const char* msg;
+                        if (WSGetString(rank_link, &msg)) {
+                            string msg_str(msg);
+                            if (msg_str.find("error") != string::npos || msg_str.find("Error") != string::npos) {
+                                cerr << "Mathematica error: " << msg << endl;
+                            }
+                            WSReleaseString(rank_link, msg);
+                        }
+                    }
+                    break;
+                    
+                case INPUTNAMEPKT:
+                    {
+                        const char* name;
+                        if (WSGetString(rank_link, &name)) {
+                            WSReleaseString(rank_link, name);
+                        }
+                    }
+                    break;
+                    
+                default:
+                    break;
+            }
+            
+            WSNewPacket(rank_link);
+            attempts++;
+        }
+        
+        if (attempts >= max_attempts) {
+            cerr << "Max attempts reached waiting for rank result" << endl;
+            WSNewPacket(rank_link);
+            return -1;
+        }
+        
+        int rank;
+        if (!WSGetInteger(rank_link, &rank)) {
+            cerr << "Failed to get rank result" << endl;
+            WSNewPacket(rank_link);
+            return -1;
+        }
+        
+        WSNewPacket(rank_link);
+        return rank;
+    }
+    
+    /**
+     * @brief Calculates the GCD of rank subminors using dedicated kernel
+     * @param matrix 
+     * @param x rank of the matrix (size of submatrices to consider)
+     * @return string GCD result as a string expression
+     */
+    string calc_gcd_rank_subminors(const vector<vector<string>>& matrix, int x) {
+        if (!det_link) {
+            cerr << "Determinant kernel not connected" << endl;
+            return "";
+        }
+        
+        // Clear any pending packets
+        clearPendingPackets(det_link);
+        WSNewPacket(det_link);
+        
+        auto start_time = chrono::steady_clock::now();
+        const int timeout_seconds = 60;
+        
+        // Send the function call: GCDofRankSubminors[matrix, x]
+        if (!WSPutFunction(det_link, "GCDofRankSubminors", 2)) {
+            cerr << "Failed to send GCDofRankSubminors function" << endl;
+            return "";
+        }
+        
+        // Send the matrix
+        if (!WSPutFunction(det_link, "List", matrix.size())) {
+            cerr << "Failed to send outer List" << endl;
+            return "";
+        }
+        
+        for (const auto& row : matrix) {
+            if (!WSPutFunction(det_link, "List", row.size())) {
+                cerr << "Failed to send row List" << endl;
+                return "";
+            }
+            for (const auto& element : row) {
+                if (!WSPutFunction(det_link, "ToExpression", 1)) {
+                    cerr << "Failed to send ToExpression" << endl;
+                    return "";
+                }
+                if (!WSPutString(det_link, element.c_str())) {
+                    cerr << "Failed to send element: " << element << endl;
+                    return "";
+                }
+            }
+        }
+        
+        // Send x parameter
+        if (!WSPutInteger(det_link, x)) {
+            cerr << "Failed to send x parameter" << endl;
+            return "";
+        }
+        
+        if (!WSEndPacket(det_link)) {
+            cerr << "Failed to end packet" << endl;
+            return "";
+        }
+        
+        // Wait for result (same pattern as calc_rank)
+        int packet_type;
+        int attempts = 0;
+        const int max_attempts = 100;
+        
+        while (attempts < max_attempts) {
+            auto current_time = chrono::steady_clock::now();
+            if (chrono::duration_cast<chrono::seconds>(current_time - start_time).count() > timeout_seconds) {
+                cerr << "Timeout waiting for GCD result" << endl;
+                WSNewPacket(det_link);
+                return "";
+            }
+            
+            packet_type = WSNextPacket(det_link);
+            
+            if (packet_type == 0) {
+                cerr << "Error in communication - no packet received" << endl;
+                return "";
+            }
+            
+            if (packet_type == RETURNPKT) {
+                break;
+            }
+            
+            // Handle other packet types
+            switch (packet_type) {
+                case TEXTPKT:
+                    {
+                        const char* text;
+                        if (WSGetString(det_link, &text)) {
+                            WSReleaseString(det_link, text);
+                        }
+                    }
+                    break;
+                    
+                case MESSAGEPKT:
+                    {
+                        const char* msg;
+                        if (WSGetString(det_link, &msg)) {
+                            string msg_str(msg);
+                            if (msg_str.find("error") != string::npos || msg_str.find("Error") != string::npos) {
+                                cerr << "Mathematica error: " << msg << endl;
+                            }
+                            WSReleaseString(det_link, msg);
+                        }
+                    }
+                    break;
+                    
+                case INPUTNAMEPKT:
+                    {
+                        const char* name;
+                        if (WSGetString(det_link, &name)) {
+                            WSReleaseString(det_link, name);
+                        }
+                    }
+                    break;
+                    
+                default:
+                    break;
+            }
+            
+            WSNewPacket(det_link);
+            attempts++;
+        }
+        
+        if (attempts >= max_attempts) {
+            cerr << "Max attempts reached waiting for GCD result" << endl;
+            WSNewPacket(det_link);
+            return "";
+        }
+        
+        cout << "Final packet type: " << packet_type << endl;
+        cout << "Result data type: " << WSGetType(det_link) << endl;
+
+        // Get the result as a symbol (type 34 = WSTKSYM)
+        const char* result_sym;
+        if (!WSGetSymbol(det_link, &result_sym)) {
+            cerr << "Failed to get symbol GCD result" << endl;
+            WSNewPacket(det_link);
+            return "";
+        }
+
+        string result(result_sym);
+        WSReleaseSymbol(det_link, result_sym);  // Use WSReleaseSymbol instead of WSReleaseString
+        WSNewPacket(det_link);
+
+        return result;
+    }
+
 };
 
 /**
@@ -195,14 +609,11 @@ vector<vector<int>> gamma_plus(vector<vector<int>>& gamma_set) {
     for (const auto& subset : gamma_set) {
         vector<int> temp_subset;
         for (const auto& elem : subset) {
-            // Increment each element of the subset by 1
             temp_subset.push_back(elem + 1);
         }
-        // Combine and sort subset with the incremented subset
         temp_subset.insert(temp_subset.end(), subset.begin(), subset.end());
         sort(temp_subset.begin(), temp_subset.end());
         
-        // Add the combined subset to the gamma_plus_set
         gamma_plus_set.push_back(temp_subset);
     }
     return gamma_plus_set;
@@ -473,14 +884,82 @@ string matrixToMathematica(const matrix& M) {
     return out.str();
 }
 
+vector<vector<string>> matrix_to_str_arr(const matrix& m) {
+    vector<vector<string>> result;
+    result.assign(m.rows(), vector<string>(m.cols(), ""));
+    for (size_t i = 0; i < m.rows(); i++) {
+        for (size_t j = 0; j < m.cols(); j++) {
+            ostringstream oss;
+            oss << m(i, j);
+            result[i][j] = oss.str();
+        }
+    }
+    return result;
+}
+
+/**
+ * @brief Converts a Mathematica output string to a GiNaC ex object
+ * Handles only basic operations: +, -, *, /, ^
+ * @param mathematica_str The output string from Mathematica
+ * @return ex The corresponding GiNaC expression
+ */
+ex mathematica_to_ginac(const string& mathematica_str) {
+    // Symbol cache to ensure consistent symbols
+    static map<string, symbol> symbol_cache;
+    
+    auto get_symbol = [&](const string& name) {
+        auto it = symbol_cache.find(name);
+        if (it != symbol_cache.end()) {
+            return it->second;
+        }
+        symbol s(name);
+        symbol_cache[name] = s;
+        return s;
+    };
+    
+    try {
+        string processed = mathematica_str;
+        
+        // Remove extra whitespace
+        processed = regex_replace(processed, regex(R"(\s+)"), " ");
+        
+        // Convert power notation x^y to pow(x,y)
+        processed = regex_replace(processed, regex(R"((\w+|\([^)]+\))\^(\w+|\([^)]+\)))"), "pow($1,$2)");
+        
+        // Handle implicit multiplication (like "2 x" or "x y")
+        processed = regex_replace(processed, regex(R"((\w+|\))\s+(\w+|\())"), "$1*$2");
+        
+        // Extract variable names for symbol table
+        regex var_regex(R"(\b[a-zA-Z][a-zA-Z0-9]*\b)");
+        sregex_iterator vars_begin(processed.begin(), processed.end(), var_regex);
+        sregex_iterator vars_end;
+        
+        symtab table;
+        for (sregex_iterator i = vars_begin; i != vars_end; ++i) {
+            string var_name = i->str();
+            if (var_name != "pow") {  // Skip function names
+                table[var_name] = get_symbol(var_name);
+            }
+        }
+        
+        // Parse with GiNaC parser
+        parser reader(table);
+        return reader(processed);
+        
+    } catch (const exception& e) {
+        cerr << "Error parsing: " << mathematica_str << " -> " << e.what() << endl;
+        return 0;
+    }
+}
 
 /**
  * Computes the GCD of all r×r submatrix determinants of a non-square Jacobian matrix
  * @param J the Jacobian matrix
  * @return the symbolic GCD of all r×r submatrix determinants
  */
-ex gcd_of_maximal_minors(const matrix& J) {
-    int r = J.rank();
+ex gcd_of_maximal_minors(const matrix& J, MathematicaInterface& math) {
+    //int r = J.rank();
+    int r = math.calc_rank(matrix_to_str_arr(J));
     int rows = J.rows();
     int cols = J.cols();
 
@@ -489,11 +968,11 @@ ex gcd_of_maximal_minors(const matrix& J) {
 
     vector<ex> minors;
 
-    // Generate all r-row and r-col index combinations
     vector<vector<int>> row_indices;
     vector<vector<int>> col_indices;
 
     // Helper lambda to generate combinations
+    // cout << "Starting generating combos" << endl;
     auto generate_combinations = [](int n, int k) {
         vector<vector<int>> result;
         vector<int> comb(k);
@@ -512,19 +991,23 @@ ex gcd_of_maximal_minors(const matrix& J) {
 
     row_indices = generate_combinations(rows, r);
     col_indices = generate_combinations(cols, r);
-
+    // cout << "Combos generated, starting minors" << endl;
     for (const auto& row_set : row_indices) {
         for (const auto& col_set : col_indices) {
             matrix submat(r, r);
-            for (int i = 0; i < r; ++i)
-                for (int j = 0; j < r; ++j)
+            for (int i = 0; i < r; ++i) {
+                for (int j = 0; j < r; ++j) {
                     submat(i, j) = J(row_set[i], col_set[j]);
-
+                }
+            }
             ex det = submat.determinant();
-            if (!det.is_zero())
+            if (!det.is_zero()) {
                 minors.push_back(det);
+                return collect_common_factors(det);
+            }
         }
     }
+    // cout << "All minors calculated, starting gcd" << endl;
 
     if (minors.empty())
         return 0;
@@ -533,7 +1016,7 @@ ex gcd_of_maximal_minors(const matrix& J) {
     ex result = minors[0];
     for (size_t i = 1; i < minors.size(); ++i)
         result = gcd(result, minors[i]);
-
+    // cout << "gcd calculated" << endl;
     return collect_common_factors(result);
 }
 
@@ -607,9 +1090,10 @@ ex extract_factors(const ex& expr) {
  * @param n number of nodes
  * @param csv_file spreadsheet out stream
  */
-void run_all_combinations(int n, ofstream& csv_file) {
+void run_all_combinations(int n, ofstream& csv_file, MathematicaInterface& math) {
     int count = 0;
-    ex max_case = GiNaC::pow(2, n - 1) * n * (n + 1);
+    // using the ginac namespace so that it knows witch pow function to use
+    ex num_cases = GiNaC::pow(2, n - 1) * n * (n + 1);
     for (int num_leaks = 0; num_leaks <= n; ++num_leaks) {
         vector<vector<int>> leak_combinations;
         
@@ -646,16 +1130,18 @@ void run_all_combinations(int n, ofstream& csv_file) {
                     vector<ex> coefficients = compute_coefficient_map(input_config, subsets, subsets_plus);
                     matrix J = compute_jacobian(coefficients, input_config.parameters);
                     
-                    int rank = J.rank();
+                    int rank = math.calc_rank(matrix_to_str_arr(J));
                     int max_rank = J.cols();
                     bool identifiable = (rank == max_rank);
+                    bool is_square = (input_config.d + leak_combinations.size() == 3);
                     
                     ex locus = 0;
-                    if (J.rows() == J.cols()) {
-                        locus = extract_factors(collect_common_factors(J.determinant()));
-                    } else if (identifiable) {
-                        locus = extract_factors(gcd_of_maximal_minors(J));
-                    } else {
+                    bool calc_locus = (n < 5);
+                    if ((J.rows() == J.cols()) && calc_locus) {
+                        locus = extract_factors(J.determinant());
+                    } else if (identifiable && calc_locus) {
+                        locus = gcd_of_maximal_minors(J, math);
+                    } else if (calc_locus) {
                         locus = 0;
                     }
 
@@ -665,11 +1151,12 @@ void run_all_combinations(int n, ofstream& csv_file) {
                              << "\"" << leaks_to_string(leak_combo) << "\"," 
                              << input << "," 
                              << output << "," 
-                             << (identifiable ? "True" : "False") << "," 
+                             << (identifiable ? "True" : "False") << ","
+                             << (is_square ? "True" : "False") << "," 
                              << rank << "/" << max_rank << ","
                              << locus << endl; 
                     count++;
-                    cout << count << "/" << max_case << endl;
+                    cout << count << "/" << num_cases << endl;
                 }
             }
         }
@@ -678,6 +1165,11 @@ void run_all_combinations(int n, ofstream& csv_file) {
 
 int main(int argc, char* argv[]) {
     bool batch_mode = false;
+    MathematicaInterface math;
+    if (!math.initialize()) {
+        cerr << "Failed to initialize Mathematica interface" << endl;
+        return 1;
+    }
     if (argc > 1 && strcmp(argv[1], "-s") == 0) {
         batch_mode = true;
     }
@@ -689,9 +1181,9 @@ int main(int argc, char* argv[]) {
         cout << "Running in batch mode - generating CSV for all combinations of n=" << max_nodes << "..." << endl;
         string filename = "catenary_results.csv";
         ofstream csv_file(filename);
-        csv_file << "# compartments,# leaks,Leak locations,Input,Output,Identifiable,Rank,Singular Locus\n";
+        csv_file << "# compartments,# leaks,Leak locations,Input,Output,Identifiable,Square,Rank,Singular Locus\n";
         for (int i = 1; i <= max_nodes; i++) {
-            run_all_combinations(i , csv_file);
+            run_all_combinations(i , csv_file, math);
         }
         csv_file.close();
         cout << "CSV file 'catenary_results.csv' has been generated." << endl;
@@ -743,7 +1235,9 @@ int main(int argc, char* argv[]) {
     
     if (input.n < 5) {
         int rank = J.rank();
+        int wolf_rank = math.calc_rank(matrix_to_str_arr(J));
         cout << "Rank of Jacobian Matrix: " << rank << endl;
+        cout << "Wolfram calculated rank of Jacobian Matrix: " << wolf_rank << endl;
 
         if (rank == J.cols()) {
             cout << "The model is identifiable & full rank; rank = " << rank << "." << endl;
@@ -759,12 +1253,13 @@ int main(int argc, char* argv[]) {
             ex determinant = J.determinant();
             determinant = collect_common_factors(determinant);
             locus = extract_factors(determinant);
+            string locus_str = math.calc_gcd_rank_subminors(matrix_to_str_arr(J), rank);
             cout << "Determinant of square Jacobian Matrix: " << determinant << endl;
             cout << "Singular locus of square Jacobian Matrix: " << locus << endl;
         } 
         else if (is_full_rank){
             cout << "Jacobian Matrix is not square but is full rank, computing GCD of maximal minors instead." << endl;
-            ex gcd_result = gcd_of_maximal_minors(J);
+            ex gcd_result = gcd_of_maximal_minors(J, math);
             cout << "GCD of maximal minors: " << gcd_result << endl;
         }
         else

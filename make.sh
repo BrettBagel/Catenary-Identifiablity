@@ -8,5 +8,9 @@ cpp_filename="catmodel.cc"
 exac_filename="catmodel"
 
 echo Making $exac_filename exacutable from $cpp_filename
-g++ -o $exac_filename $cpp_filename -lginac -lcln
+g++ -I/Applications/Wolfram.app/Contents/SystemFiles/Links/WSTP/DeveloperKit/MacOSX-x86-64/CompilerAdditions \
+    -L/Applications/Wolfram.app/Contents/SystemFiles/Links/WSTP/DeveloperKit/MacOSX-x86-64/CompilerAdditions \
+    -lWSTPi4 -framework Foundation \
+    $cpp_filename -o $exac_filename \
+    -lcln -lginac 
 echo $exac_filename exacutable compiled
