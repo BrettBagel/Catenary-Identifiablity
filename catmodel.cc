@@ -1,7 +1,14 @@
-// C++ adapation of identifying catenary linear and directed-cycle compartmental models computationally
-// Author: Brett Hajdaj
-// Date: 2025 06 20
+// @brief C++ adapation of identifying catenary linear and directed-cycle compartmental models computationally
+// @author Brett Hajdaj and Garrett Rhoads
+// @date 2025 07 25
 
+
+/* 
+ * This program uses the mathematica kernel, you will need to install
+ * wolfram mathematica to run it aswell as change the filepaths in this include
+ * make.sh file or, if u can get it working proper cmake file to match your
+ * file system, do it here and in the vector string launch commands
+ */
 #include "/Applications/Wolfram.app/Contents/SystemFiles/Links/WSTP/DeveloperKit/MacOSX-x86-64/CompilerAdditions/wstp.h"
 #include <ginac/ginac.h>
 #include <unordered_set>
@@ -50,8 +57,6 @@ struct UserInput {
         return s;
     }
 };
-
-// Improved MathematicaInterface class with better error handling and debugging
 
 class MathematicaInterface {
 private:
@@ -126,6 +131,8 @@ private:
             }
         }
 
+        // try removing, the kernel is buggy af so u might jsut have to give it
+        // a minute or 2 :)
         this_thread::sleep_for(chrono::seconds(60));
         
         if (!WSReady(link)) {
@@ -143,6 +150,11 @@ private:
 public:
     MathematicaInterface() : env(nullptr), rank_link(nullptr), factor_link(nullptr) {}
     
+    /**
+     * @brief Initializes the links to the mathematica kernel
+     * @return true 
+     * @return false 
+     */
     bool initialize() {
         cout << "Initializing WSTP environment..." << endl;
         env = WSInitialize(nullptr);
@@ -195,6 +207,11 @@ public:
         return env != nullptr && rank_link != nullptr && factor_link != nullptr;
     }
     
+    /**
+     * @brief Calculates the rank of a matrix using the mathematica kernel
+     * @param matrix 
+     * @return int 
+     */
     int calc_rank(const vector<vector<string>>& matrix) {
         if (!rank_link) {
             cerr << "Rank kernel not connected" << endl;
@@ -324,7 +341,7 @@ public:
     }
 
     /**
-     * Factors a GiNaC expression using Mathematica's Factor function
+     * @brief Factors a GiNaC expression using Mathematica's Factor function
      * @param expr The GiNaC expression to factor
      * @return The factored expression as a string in InputForm
      * @throws runtime_error if communication with Mathematica fails
@@ -439,8 +456,8 @@ public:
 };
 
 /**
- * Converts a Mathematica output string to a GiNaC expression
- * Handles basic operations and power notation from Mathematica's InputForm
+ * @brief Converts a Mathematica output string to a GiNaC expression. Handles 
+ *        basic operations and power notation from Mathematica's InputForm
  * @param mathematica_str The string from Mathematica (should be in InputForm)
  * @return ex The corresponding GiNaC expression
  * @throws runtime_error if parsing fails
@@ -546,7 +563,7 @@ ex mathematica_string_to_ginac(const string& mathematica_str) {
 }
 
 /**
- * Creates symbols for the edge parameters and leak parameters based on user input
+ * @brief Creates symbols for the edge parameters and leak parameters based on user input
  * @param input the user input containing the number of compartments and leak locations
  */
 void create_symbols(UserInput& input) {
@@ -565,7 +582,7 @@ void create_symbols(UserInput& input) {
 }
 
 /**
- * Computes the outgoing sums for each compartment
+ * @brief Computes the outgoing sums for each compartment
  * @param input the user input containing the number of compartments and leak locations
  * @param compartment_set the set of compartments to compute the outgoing sums for
  * @return a vector of expressions representing the outgoing sums for each compartment
@@ -611,7 +628,7 @@ vector<ex> out_Ml(UserInput& input, const vector<int>& compartment_set) {
 }
 
 /**
- * Computes the product of edge parameters between two compartments
+ * @brief Computes the product of edge parameters between two compartments
  * @param i the starting compartment
  * @param j the ending compartment
  * @param input the user input containing the parameters
@@ -627,7 +644,7 @@ ex kappa_ij(UserInput& input, int i, int j) {
 }
 
 /**
- * Computes the product of edge parameters along a subset
+ * @brief Computes the product of edge parameters along a subset
  * @param subset the vector of integers representing the subset of compartments
  * @param input the user input containing the parameters
  * @return the product of all edge parameters over the subset
@@ -643,7 +660,7 @@ ex kappa(UserInput& input, const vector<int>& subset) {
 }
 
 /**
- * Helper function to generate subsets of [n-1] without consecutive numbers
+ * @brief Helper function to generate subsets of [n-1] without consecutive numbers
  * @param n the number of compartments
  * @param index the current index in the recursion
  * @param current_subset the current subset being built
@@ -666,7 +683,7 @@ void gamma_helper(int n, int index, vector<int>& current_subset, vector<vector<i
 }
 
 /**
- * Generates the set of nonempty subsets of [n-1] without consecutive numbers
+ * @brief Generates the set of nonempty subsets of [n-1] without consecutive numbers
  * @param input the user input containing the number of compartments
  * @return a vector of vectors representing the subsets
  */
@@ -678,8 +695,8 @@ vector<vector<int>> gamma(UserInput& input) {
 }
 
 /**
- * Takes the set of nonempty subsets of [n-1] without consecutive numbers,
- * and returns a new set where each element of the subset is incremented by 1.
+ * @brief Takes the set of nonempty subsets of [n-1] without consecutive numbers,
+ *        and returns a new set where each element of the subset is incremented by 1.
  * @param gamma_set the set of subsets to be processed
  * @return a new set of subsets with each element incremented by 1
  */
@@ -700,7 +717,7 @@ vector<vector<int>> gamma_plus(vector<vector<int>>& gamma_set) {
 
 
 /**
- * Computes the intersection of two sets
+ * @brief Computes the intersection of two sets
  * @param set1 the first set
  * @param set2 the second set
  * @return a vector containing the elements that are in both sets
@@ -716,7 +733,7 @@ vector<int> intersection_of_sets(const vector<int>& set1, const vector<int>& set
 }
 
 /**
- * Computes the elementary symmetric polynomials for a given set of variables
+ * @brief Computes the elementary symmetric polynomials for a given set of variables
  * @param variables the vector of variables for which to compute the polynomials
  * @param k the degree of the polynomial
  * @return a vector containing the elementary symmetric polynomials up to degree k
@@ -739,7 +756,7 @@ vector<ex> elementary_symmetric_polynomials(const vector<ex>& variables, int k) 
 }
 
 /**
- * Computes a new set of compartments excluding specified elements
+ * @brief Computes a new set of compartments excluding specified elements
  * @param existing_set the original set of compartments
  * @param excluded_elems the elements to be excluded from the new set
  * @return a new vector containing the elements of existing_set excluding excluded_elems
@@ -759,7 +776,7 @@ vector<int> compartment_set(vector<int> existing_set, vector<int> excluded_elems
 }
 
 /**
- * Computes the union of two sets
+ * @brief Computes the union of two sets
  * @param set1 the first set
  * @param set2 the second set
  * @return a vector containing the union of the two sets
@@ -775,7 +792,7 @@ vector<int> union_sets(const vector<int>& set1, const vector<int>& set2) {
 }
 
 /**
- * Computes the Jacobian matrix of coefficients with respect to parameters
+ * @brief Computes the Jacobian matrix of coefficients with respect to parameters
  * @param coefficients The vector of coefficient expressions
  * @param parameters The vector of parameters to differentiate against
  * @return A matrix (vector of vectors) of partial derivatives
@@ -794,7 +811,7 @@ matrix compute_jacobian(const vector<ex>& coefficients, const vector<ex>& parame
 }
 
 /**
- * Helper function to compute the coefficient map for the catenary model
+ * @brief Helper function to compute the coefficient map for the catenary model
  * @param input the user input containing the number of compartments and leak locations
  * @param subsets the set of nonempty subsets of [n-1] without consecutive numbers
  * @param subsets_plus the set of nonempty subsets of [n-1] without consecutive numbers + 1
@@ -803,7 +820,10 @@ matrix compute_jacobian(const vector<ex>& coefficients, const vector<ex>& parame
  * @param is_tilde flag to indicate if we are computing for tilde coefficients
  * @return the computed sum as an expression
  */
-ex helper_sum(UserInput& input, vector<vector<int>>& subsets, vector<vector<int>>& subsets_plus, ex full_kappa, int i, bool is_tilde = false) {
+ex helper_sum(UserInput& input,                  vector<vector<int>>& subsets, 
+              vector<vector<int>>& subsets_plus, ex full_kappa, 
+              int i,                             bool is_tilde = false) {
+
     ex sum = 0;
     int iterator = 0;
     if (!is_tilde) {
@@ -811,9 +831,12 @@ ex helper_sum(UserInput& input, vector<vector<int>>& subsets, vector<vector<int>
             int length = subset.size();
             int e_index = i - (2 * length);
             if (length * 2 <= i) {
-                vector<int> exclusion_set = compartment_set(input.all_compartments, subsets_plus[iterator]);
+                vector<int> exclusion_set = compartment_set(
+                                input.all_compartments, subsets_plus[iterator]
+                            );
                 vector<ex> set_for_esp = out_Ml(input, exclusion_set);
-                sum += kappa(input, subset) * elementary_symmetric_polynomials(set_for_esp, e_index)[e_index];
+                sum += kappa(input, subset) * 
+                elementary_symmetric_polynomials(set_for_esp, e_index)[e_index];
             }
             iterator++;
         }
@@ -832,7 +855,8 @@ ex helper_sum(UserInput& input, vector<vector<int>>& subsets, vector<vector<int>
                     iterator++;
                     continue;
                 }
-                sum += kappa(input, subset) * elementary_symmetric_polynomials(set_for_esp, e_index)[e_index];
+                sum += kappa(input, subset) * 
+                elementary_symmetric_polynomials(set_for_esp, e_index)[e_index];
             }
             iterator += 1;
         }
@@ -841,13 +865,15 @@ ex helper_sum(UserInput& input, vector<vector<int>>& subsets, vector<vector<int>
 }
 
 /**
- * Computes the coefficient map for the catenary model
+ * @brief Computes the coefficient map for the catenary model
  * @param input the user input containing the number of compartments and leak locations
  * @param subsets the set of nonempty subsets of [n-1] without consecutive numbers
  * @param subsets_plus the set of nonempty subsets of [n-1] without consecutive numbers + 1
  * @return a vector of expressions representing the coefficients
  */
-vector<ex> compute_coefficient_map(UserInput& input, vector<vector<int>>& subsets, vector<vector<int>>& subsets_plus) {
+vector<ex> compute_coefficient_map(UserInput& input, 
+                                   vector<vector<int>>& subsets, 
+                                   vector<vector<int>>& subsets_plus) {
     vector<ex> coefficients;
     vector<ex> full_esp_list = elementary_symmetric_polynomials(out_Ml(input, input.all_compartments), input.n);
     vector<int> tilde_set = compartment_set(input.all_compartments, input.P);
@@ -876,7 +902,7 @@ vector<ex> compute_coefficient_map(UserInput& input, vector<vector<int>>& subset
 }
 
 /**
- * Function to handle user input for the model
+ * @brief Function to handle user input for the model
  * @return a UserInput struct containing the user-defined parameters
  */
 UserInput user_input() {
@@ -908,7 +934,9 @@ UserInput user_input() {
             continue;
         }
 
-        if (find(input.leak_compartments.begin(), input.leak_compartments.end(), leak_compartment) != input.leak_compartments.end()) {
+        if (find(input.leak_compartments.begin(), 
+                 input.leak_compartments.end(), 
+                 leak_compartment) != input.leak_compartments.end()) {
             cout << "Leak already exists. Please enter a different leak compartment." << endl;
             i--;
             continue;
@@ -929,7 +957,7 @@ UserInput user_input() {
 }
 
 /**
- * Converts a matrix to a Mathematica-compatible string representation
+ * @brief Converts a matrix to a Mathematica-compatible string representation
  * @param M the matrix to convert
  * @return a string representing the matrix in Mathematica format
  */
@@ -949,6 +977,11 @@ string matrixToMathematica(const matrix& M) {
     return out.str();
 }
 
+/**
+ * @brief Converts a matrix object to a 2d array of strings
+ * @param m - matrix object to be converted
+ * @return vector<vector<string>> output 2d array
+ */
 vector<vector<string>> matrix_to_str_arr(const matrix& m) {
     vector<vector<string>> result;
     result.assign(m.rows(), vector<string>(m.cols(), ""));
@@ -962,9 +995,8 @@ vector<vector<string>> matrix_to_str_arr(const matrix& m) {
     return result;
 }
 
-
 /**
- * Computes the GCD of all r×r submatrix determinants of a non-square Jacobian matrix
+ * @brief Computes the GCD of all r×r submatrix determinants of a non-square Jacobian matrix
  * @param J the Jacobian matrix
  * @return the symbolic GCD of all r×r submatrix determinants
  */
@@ -1063,7 +1095,6 @@ string leaks_to_string(const vector<int>& leaks) {
 
 /**
  * @brief Returns just the factors of an expression
- * 
  * @param expr 
  * @return ex 
  */
@@ -1090,7 +1121,7 @@ ex extract_factors(const ex& expr) {
 
 /**
  * @brief Runs all combinations for a given number of compartments and outputs 
- * to CSV
+ *        to CSV
  * @param n number of nodes
  * @param csv_file spreadsheet out stream
  */
@@ -1180,12 +1211,16 @@ int main(int argc, char* argv[]) {
     
     if (batch_mode) {
         int max_nodes = 0;
+        string filename;
         cout << "Max graph size: " << endl;
         cin >> max_nodes;
-        cout << "Running in batch mode - generating CSV for all combinations of n=" << max_nodes << "..." << endl;
-        string filename = "test.csv";
+        cout << "Output .csv filename:" << endl;
+        cin >> filename;
+        cout << "Running in batch mode - generating CSV for all combinations" <<
+                " of n=" << max_nodes << "..." << endl;
         ofstream csv_file(filename);
-        csv_file << "# compartments,# leaks,Leak locations,Input,Output,Identifiable,Square,Rank,Singular Locus\n";
+        csv_file << "# compartments,# leaks,Leak locations,Input,Output," << 
+                    "Identifiable,Square,Rank,Singular Locus\n";
         for (int i = 1; i <= max_nodes; i++) {
             run_all_combinations(i , csv_file, math);
         }
@@ -1203,8 +1238,11 @@ int main(int argc, char* argv[]) {
     bool is_full_rank = false;
 
     cout << "\nWelcome to the Catenary Model Identifier!" << endl;
-    cout << "This program computes the Jacobian matrix of the coefficients with respect to the parameters." << endl;
-    cout << "You can use Mathematica to compute the rank and determinant of the models n >= 5, but there are built in functions for n < 5 if you want to use them." << endl;
+    cout << "This program computes the Jacobian matrix of the coefficients " << 
+            "with respect to the parameters." << endl;
+    cout << "You can use Mathematica to compute the rank and determinant of " << 
+            "the models n >= 5, but there are built in functions for n < 5 " << 
+            "if you want to use them." << endl;
     
     matrix J = compute_jacobian(coefficients, input.parameters);
 
@@ -1226,9 +1264,12 @@ int main(int argc, char* argv[]) {
         cout << "]" << endl;
     }
 
-    // FOR TOMORROW: CODE A FUNCTION TO DO NUMERICAL RANK AND CODE A FUNCTION TO FIND SUBMATRICES IF NOT SQUARE. OTHERWISE JUST TAKE DET
-    // First, check coefficients in n = 4 case, see when that failsafe in the code actually runs and if it causes issues
-    // New hunch, the singular locus in the case of no leaks contains the forward parameters of all compartments and the backwards parameters of the last compartment
+    // FOR TOMORROW: CODE A FUNCTION TO DO NUMERICAL RANK AND CODE A FUNCTION 
+    // TO FIND SUBMATRICES IF NOT SQUARE. OTHERWISE JUST TAKE DET
+    // First, check coefficients in n = 4 case, see when that failsafe in the 
+    // code actually runs and if it causes issues. New hunch, the singular locus
+    // in the case of no leaks contains the forward parameters of all 
+    // compartments and the backwards parameters of the last compartment
     cout << "-----------------------------\n";
     cout << "Jacobian Matrix in Mathematica format:\n";
     cout << matrixToMathematica(J) << endl;
@@ -1240,11 +1281,13 @@ int main(int argc, char* argv[]) {
         cout << "Wolfram calculated rank of Jacobian Matrix: " << wolf_rank << endl;
 
         if (wolf_rank == J.cols()) {
-            cout << "The model is identifiable & full rank; rank = " << wolf_rank << "." << endl;
+            cout << "The model is identifiable & full rank; rank = " << 
+                    wolf_rank << "." << endl;
             is_full_rank = true;
         } 
         else
-            cout << "The model is not identifiable & not full rank; rank = " << wolf_rank << "." << endl;
+            cout << "The model is not identifiable & not full rank; rank = " << 
+                    wolf_rank << "." << endl;
         cout << "----------------------------------------" << endl;
         
         ex locus = 0;
@@ -1256,7 +1299,8 @@ int main(int argc, char* argv[]) {
             cout << "Singular locus of square Jacobian Matrix: " << locus << endl;
         } 
         else if (is_full_rank){
-            cout << "Jacobian Matrix is not square but is full rank, computing GCD of maximal minors instead." << endl;
+            cout << "Jacobian Matrix is not square but is full rank, computing" << 
+            " GCD of maximal minors instead." << endl;
             ex gcd_result = gcd_of_maximal_minors(J, math);
             cout << "GCD of maximal minors: " << gcd_result << endl;
         }
