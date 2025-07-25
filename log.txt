@@ -1,46 +1,50 @@
-Enter the number of compartments: Enter the input: Enter the output: Enter the number of leaks: Enter leak compartment: Enter leak compartment: Enter leak compartment: 
+Enter the number of compartments: Enter the input: Enter the output: Enter the number of leaks: Enter leak compartment: 
 Welcome to the Catenary Model Identifier!
 This program computes the Jacobian matrix of the coefficients with respect to the parameters.
 You can use Mathematica to compute the rank and determinant of the models n >= 5, but there are built in functions for n < 5 if you want to use them.
 
 Coefficients (a_i and a_i tilde):
 ----------------------------------------
-Coefficient a_1: k03+k23+k32+k12+k01+k02+k21
-Coefficient a_2: (k01+k21)*(k32+k12+k02)+(k32+k12+k01+k02+k21)*(k03+k23)-k12*k21-k23*k32
-Coefficient a_3: -k12*(k03+k23)*k21+(k01+k21)*(k03+k23)*(k32+k12+k02)-k23*k32*(k01+k21)
-Coefficient a_4: 1
-Coefficient a_5: k03+k23+k32+k12+k02
-Coefficient a_6: (k03+k23)*(k32+k12+k02)-k23*k32
-Coefficient a_7: 0
+Coefficient a_1: k43+k23+k32+k12+k03+k34+k21
+Coefficient a_2: (k32+k12)*k21+(k43+k23+k32+k12+k03+k21)*k34-k12*k21-k43*k34+(k43+k23+k03)*(k32+k12+k21)-k23*k32
+Coefficient a_3: -k23*k32*(k34+k21)+((k32+k12)*k21+(k43+k23+k03)*(k32+k12+k21))*k34-k43*k34*(k32+k12+k21)-(k43+k23+k03+k34)*k12*k21+(k43+k23+k03)*(k32+k12)*k21
+Coefficient a_4: -k43*(k32+k12)*k34*k21-k43*k12*k34*k21-(k43+k23+k03)*k12*k34*k21+(k43+k23+k03)*(k32+k12)*k34*k21-k23*k32*k34*k21
+Coefficient a_5: k43*k32
+Coefficient a_6: k43*k32*k21
+Coefficient a_7: -k12*k21
 ----------------------------------------
 
 Jacobian Matrix (∂coefficients/∂parameters):
 ----------------------------------------
 Row 1: [1, 1, 1, 1, 1, 1, 1]
-Row 2: [k03+k23+k32+k02, k03+k23+k01, k03+k01+k21, k12+k01+k02+k21, k32+k12+k01+k02+k21, k03+k23+k01+k21, k03+k23+k32+k12+k02]
-Row 3: [k23*k02+k03*k32+k03*k02, k23*k01+k03*k01, k03*k01+k03*k21, k12*k01+k02*k21+k01*k02, k32*k01+k32*k21+k12*k01+k02*k21+k01*k02, k23*k01+k23*k21+k03*k01+k03*k21, k23*k02+k03*k32+k03*k12+k23*k12+k03*k02]
-Row 4: [0, 0, 0, 0, 0, 0, 0]
-Row 5: [0, 1, 1, 1, 1, 1, 0]
-Row 6: [0, k03+k23, k03, k12+k02, k32+k12+k02, k03+k23, 0]
-Row 7: [0, 0, 0, 0, 0, 0, 0]
+Row 2: [k43+k23+k32+k03+k34, k43+k23+k03+k34, k43+k03+k34+k21, k12+k34+k21, k32+k12+k21, k23+k32+k12+k03+k21, k32+k12+k34+k21]
+Row 3: [k23*k34+k43*k32+k32*k03+k32*k34+k03*k34, k23*k34+k03*k34, k03*k21+k34*k21+k03*k34+k43*k21, k12*k34+k34*k21, k32*k21, k23*k21+k32*k03+k32*k21+k12*k03+k23*k12+k03*k21, k32*k34+k32*k21+k12*k34+k34*k21]
+Row 4: [-2*k43*k12*k34+k32*k03*k34, -2*k43*k34*k21, k03*k34*k21, 0, -2*k12*k34*k21, -2*k43*k12*k21+k32*k03*k21, k32*k34*k21]
+Row 5: [0, 0, k43, 0, k32, 0, 0]
+Row 6: [k43*k32, 0, k43*k21, 0, k32*k21, 0, 0]
+Row 7: [-k12, -k21, 0, 0, 0, 0, 0]
 -----------------------------
 Jacobian Matrix in Mathematica format:
 {{1, 1, 1, 1, 1, 1, 1},
-{k03+k23+k32+k02, k03+k23+k01, k03+k01+k21, k12+k01+k02+k21, k32+k12+k01+k02+k21, k03+k23+k01+k21, k03+k23+k32+k12+k02},
-{k23*k02+k03*k32+k03*k02, k23*k01+k03*k01, k03*k01+k03*k21, k12*k01+k02*k21+k01*k02, k32*k01+k32*k21+k12*k01+k02*k21+k01*k02, k23*k01+k23*k21+k03*k01+k03*k21, k23*k02+k03*k32+k03*k12+k23*k12+k03*k02},
-{0, 0, 0, 0, 0, 0, 0},
-{0, 1, 1, 1, 1, 1, 0},
-{0, k03+k23, k03, k12+k02, k32+k12+k02, k03+k23, 0},
-{0, 0, 0, 0, 0, 0, 0}}
-Rank of Jacobian Matrix: 5
-The model is not identifiable & not full rank; rank = 5.
+{k43+k23+k32+k03+k34, k43+k23+k03+k34, k43+k03+k34+k21, k12+k34+k21, k32+k12+k21, k23+k32+k12+k03+k21, k32+k12+k34+k21},
+{k23*k34+k43*k32+k32*k03+k32*k34+k03*k34, k23*k34+k03*k34, k03*k21+k34*k21+k03*k34+k43*k21, k12*k34+k34*k21, k32*k21, k23*k21+k32*k03+k32*k21+k12*k03+k23*k12+k03*k21, k32*k34+k32*k21+k12*k34+k34*k21},
+{-2*k43*k12*k34+k32*k03*k34, -2*k43*k34*k21, k03*k34*k21, 0, -2*k12*k34*k21, -2*k43*k12*k21+k32*k03*k21, k32*k34*k21},
+{0, 0, k43, 0, k32, 0, 0},
+{k43*k32, 0, k43*k21, 0, k32*k21, 0, 0},
+{-k12, -k21, 0, 0, 0, 0, 0}}
+Rank of Jacobian Matrix: 7
+Wolfram calculated rank of Jacobian Matrix: 7
+The model is identifiable & full rank; rank = 7.
 ----------------------------------------
-Determinant of square Jacobian Matrix: 0
+Final packet type: 3
+Result data type: 34
+Determinant of square Jacobian Matrix: -k43*(k32*k34^3-k32*k03*k34^2+2*k43*k12*k03*k34-2*k43*k12*k34^2-k32*k12*k34^2-2*k43*k03*k34^2+k32*k03*k34*k21+2*k43*k23*k12*k34-2*k43^2*k34^2-k23*k32*k34^2+k32*k12*k03*k34-k32*k34^2*k21+k43*k32*k03*k34-k32^2*k03*k21-2*k43*k23*k34^2+2*k43*k32*k12*k21+2*k43*k34^3+k32^2*k34*k21+2*k43^2*k12*k34+k32^2*k03*k34-k32^2*k34^2+k23*k32*k12*k34-k43*k32*k34^2+k23*k32*k34*k21)*k32^2*k12*k21^2
+Singular locus of square Jacobian Matrix: -k43*k32^2*k12*k21^2
 ----------------------------------------
 The user-specified parameters are as follows:
-Number of Compartments: 3
-Input Node: 1
-Output Node: 1
-Leak Compartments: 3 2 1 
+Number of Compartments: 4
+Input Node: 2
+Output Node: 4
+Leak Compartments: 3 
 -----------------------------
 Thank you for using the Catenary Model Identifier!
